@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JSDOM } from "jsdom";
+import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
 
 export const runtime = "nodejs";
@@ -61,14 +61,14 @@ export async function POST(request: NextRequest) {
     }
 
     const html = await response.text();
-    const dom = new JSDOM(html, { url: url.toString() });
+    const { document } = parseHTML(html);
 
     // Strip obviously noisy elements before Readability runs
-    dom.window.document
+    document
       .querySelectorAll("script, style, noscript, iframe, nav, footer, header, form")
       .forEach((el) => el.remove());
 
-    const reader = new Readability(dom.window.document);
+    const reader = new Readability(document as unknown as Document);
     const article = reader.parse();
 
     if (!article || !article.textContent || article.textContent.trim().length < 50) {
