@@ -14,6 +14,7 @@ import {
   type VoiceOption,
 } from "@/lib/ttsEngine";
 import { GoogleTTSEngine, GOOGLE_VOICE_OPTIONS, type GoogleVoiceOption } from "@/lib/googleTtsEngine";
+import { removeNoiseText } from "@/lib/textCleanup";
 
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 2] as const;
 export type Speed = (typeof SPEEDS)[number];
@@ -28,6 +29,9 @@ interface ReaderState {
   flatSentences: FlatSentence[];
   sourceKind: SourceKind;
   sourceLabel: string | null;
+
+  // Text cleanup
+  autoCleanText: boolean;
 
   // Language & voices
   language: "es" | "en";
@@ -59,6 +63,7 @@ interface ReaderState {
   // Actions
   initVoices: () => Promise<void>;
   setText: (text: string, sourceKind: SourceKind, sourceLabel?: string | null) => void;
+  setAutoCleanText: (enabled: boolean) => void;
   setLanguage: (lang: "es" | "en") => void;
   setAutoDetect: (auto: boolean) => void;
   setVoiceURI: (uri: string) => void;
@@ -158,6 +163,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   sourceKind: null,
   sourceLabel: null,
 
+  autoCleanText: true,
+
   language: "en",
   autoDetectLanguage: true,
   voices: [],
@@ -201,10 +208,13 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     }
   },
 
-  setText: (text, sourceKind, sourceLabel = null) => {
+  setAutoCleanText: (enabled) => set({ autoCleanText: enabled }),
+
+  setText: (rawInput, sourceKind, sourceLabel = null) => {
     getSpeechEngine(set, get).stop();
     getGoogleEngine(set, get).stop();
 
+    const text = get().autoCleanText ? removeNoiseText(rawInput) : rawInput;
     const paragraphs = segmentText(text);
     const flatSentences = flattenSentences(paragraphs);
     const detected = text.trim() ? detectLanguage(text) : get().language;

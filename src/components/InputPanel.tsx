@@ -26,6 +26,8 @@ export default function InputPanel() {
   const setError = useReaderStore((s) => s.setError);
   const isProcessing = useReaderStore((s) => s.isProcessing);
   const stop = useReaderStore((s) => s.stop);
+  const autoCleanText = useReaderStore((s) => s.autoCleanText);
+  const setAutoCleanText = useReaderStore((s) => s.setAutoCleanText);
 
   const handlePasteSubmit = useCallback(() => {
     if (!pasteValue.trim()) {
@@ -148,6 +150,18 @@ export default function InputPanel() {
             {t.label}
           </button>
         ))}
+      </div>
+
+      <div className="px-4 sm:px-5 pt-4">
+        <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <input
+            type="checkbox"
+            checked={autoCleanText}
+            onChange={(e) => setAutoCleanText(e.target.checked)}
+            className="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          />
+          Clean up text automatically (remove citation marks like [1], image captions, and source credits)
+        </label>
       </div>
 
       <div className="p-4 sm:p-5">
