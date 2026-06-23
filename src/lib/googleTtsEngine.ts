@@ -28,8 +28,6 @@ export const GOOGLE_VOICE_OPTIONS: GoogleVoiceOption[] = [
   { name: "es-US-Neural2-C", languageCode: "es-US", label: "Spanish (US) — Neural2 C", lang: "es", gender: "Female" },
 ];
 
-const SENTENCE_PAUSE_MS = 120;
-
 /**
  * Narrates text using Google Cloud Text-to-Speech via the `/api/tts/google`
  * route (keeps the API key server-side). Each sentence is synthesized to an
@@ -47,7 +45,6 @@ export class GoogleTTSEngine implements TTSEngine {
   private audio: HTMLAudioElement | null = null;
   private audioCache = new Map<string, string>();
   private prefetchedKeys = new Set<string>();
-  private pauseTimer: ReturnType<typeof setTimeout> | null = null;
   private activeRequest: AbortController | null = null;
   private generation = 0;
 
@@ -96,10 +93,6 @@ export class GoogleTTSEngine implements TTSEngine {
       return;
     }
     if (this.state !== "playing") return;
-    if (this.pauseTimer) {
-      clearTimeout(this.pauseTimer);
-      this.pauseTimer = null;
-    }
     this.audio?.pause();
     this.setState("paused");
   }
@@ -118,10 +111,6 @@ export class GoogleTTSEngine implements TTSEngine {
     this.generation++;
     this.activeRequest?.abort();
     this.activeRequest = null;
-    if (this.pauseTimer) {
-      clearTimeout(this.pauseTimer);
-      this.pauseTimer = null;
-    }
     if (this.audio) {
       this.audio.onended = null;
       this.audio.onerror = null;
@@ -194,10 +183,6 @@ export class GoogleTTSEngine implements TTSEngine {
       this.audio.pause();
       this.audio = null;
     }
-    if (this.pauseTimer) {
-      clearTimeout(this.pauseTimer);
-      this.pauseTimer = null;
-    }
 
     this.currentIndex = index;
     this.setState("loading");
@@ -219,8 +204,13 @@ export class GoogleTTSEngine implements TTSEngine {
         this.callbacks.onSentenceEnd?.(index);
         const nextIndex = index + 1;
         if (nextIndex < this.sentences.length) {
-          const pauseMs = Math.round(SENTENCE_PAUSE_MS / this.rate);
-          this.pauseTimer = setTimeout(() => this.playIndex(nextIndex), pauseMs);
+          // Advance immediately rather than via setTimeout: background tabs
+          // throttle timers (sometimes to once a second or slower), which
+          // turned the intended ~100ms pause into multi-second gaps once the
+          // screen was off or another app was in front. The `<audio>`
+          // `ended` event itself isn't throttled, so chaining straight off
+          // it keeps the transition snappy regardless of tab visibility.
+          this.playIndex(nextIndex);
         } else {
           this.setState("ended");
         }
@@ -270,9 +260,9 @@ export class GoogleTTSEngine implements TTSEngine {
   }
 
   /**
-   * Fetches and caches the next sentence's audio in the background while the
-   * current one is still playing, so the gap between sentences is just the
-   * fixed `SENTENCE_PAUSE_MS` instead of also including network latency.
+   * Fetches and caches an upcoming sentence's audio in the background while
+   * an earlier one is still playing, so by the time it's needed there's
+   * little to no network latency before it can start.
    */
   private prefetchSentence(text: string | undefined) {
     const voice = this.voice;
