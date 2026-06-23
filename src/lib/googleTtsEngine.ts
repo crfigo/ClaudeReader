@@ -202,6 +202,12 @@ export class GoogleTTSEngine implements TTSEngine {
     this.currentIndex = index;
     this.setState("loading");
 
+    // Kick these off in parallel with fetching the current sentence, so they
+    // have the longest possible head start (current fetch + current
+    // playback time) before they're actually needed.
+    this.prefetchSentence(this.sentences[index + 1]);
+    this.prefetchSentence(this.sentences[index + 2]);
+
     try {
       const dataUrl = await this.getAudioForSentence(text);
       if (myGeneration !== this.generation) return; // superseded by a newer request
@@ -213,7 +219,8 @@ export class GoogleTTSEngine implements TTSEngine {
         this.callbacks.onSentenceEnd?.(index);
         const nextIndex = index + 1;
         if (nextIndex < this.sentences.length) {
-          this.pauseTimer = setTimeout(() => this.playIndex(nextIndex), SENTENCE_PAUSE_MS);
+          const pauseMs = Math.round(SENTENCE_PAUSE_MS / this.rate);
+          this.pauseTimer = setTimeout(() => this.playIndex(nextIndex), pauseMs);
         } else {
           this.setState("ended");
         }
@@ -227,7 +234,6 @@ export class GoogleTTSEngine implements TTSEngine {
       this.audio = audio;
       this.callbacks.onSentenceStart?.(index);
       this.setState("playing");
-      this.prefetchSentence(this.sentences[index + 1]);
       await audio.play();
     } catch (err) {
       if (myGeneration !== this.generation) return;
