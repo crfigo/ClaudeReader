@@ -46,6 +46,7 @@ export class GoogleTTSEngine implements TTSEngine {
   private callbacks: TTSEngineCallbacks;
   private audio: HTMLAudioElement | null = null;
   private audioCache = new Map<string, string>();
+  private prefetchedKeys = new Set<string>();
   private pauseTimer: ReturnType<typeof setTimeout> | null = null;
   private activeRequest: AbortController | null = null;
   private generation = 0;
@@ -59,6 +60,7 @@ export class GoogleTTSEngine implements TTSEngine {
     this.sentences = sentences;
     this.currentIndex = 0;
     this.audioCache.clear();
+    this.prefetchedKeys.clear();
     this.setState("idle");
   }
 
@@ -70,7 +72,10 @@ export class GoogleTTSEngine implements TTSEngine {
   setVoice(voice: GoogleVoiceOption | null) {
     const changed = voice?.name !== this.voice?.name;
     this.voice = voice;
-    if (changed) this.audioCache.clear();
+    if (changed) {
+      this.audioCache.clear();
+      this.prefetchedKeys.clear();
+    }
     if (changed && (this.state === "playing" || this.state === "loading")) {
       this.playIndex(this.currentIndex);
     }
@@ -222,6 +227,7 @@ export class GoogleTTSEngine implements TTSEngine {
       this.audio = audio;
       this.callbacks.onSentenceStart?.(index);
       this.setState("playing");
+      this.prefetchSentence(this.sentences[index + 1]);
       await audio.play();
     } catch (err) {
       if (myGeneration !== this.generation) return;
@@ -255,5 +261,34 @@ export class GoogleTTSEngine implements TTSEngine {
     const dataUrl = `data:audio/mp3;base64,${data.audioContent}`;
     this.audioCache.set(cacheKey, dataUrl);
     return dataUrl;
+  }
+
+  /**
+   * Fetches and caches the next sentence's audio in the background while the
+   * current one is still playing, so the gap between sentences is just the
+   * fixed `SENTENCE_PAUSE_MS` instead of also including network latency.
+   */
+  private prefetchSentence(text: string | undefined) {
+    const voice = this.voice;
+    if (!text || !voice) return;
+
+    const cacheKey = `${voice.name}::${text}`;
+    if (this.audioCache.has(cacheKey) || this.prefetchedKeys.has(cacheKey)) return;
+    this.prefetchedKeys.add(cacheKey);
+
+    fetch("/api/tts/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voiceName: voice.name, languageCode: voice.languageCode }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok && data.audioContent) {
+          this.audioCache.set(cacheKey, `data:audio/mp3;base64,${data.audioContent}`);
+        }
+      })
+      .catch(() => {
+        // Best-effort — if this fails, playIndex() will just fetch it normally when it's needed.
+      });
   }
 }
