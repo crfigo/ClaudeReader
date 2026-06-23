@@ -1,6 +1,12 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useReaderStore } from "@/store/useReaderStore";
+import {
+  setMediaSessionMetadata,
+  setMediaSessionPlaybackState,
+  setMediaSessionHandlers,
+} from "@/lib/mediaSession";
 
 function IconButton({
   label,
@@ -47,6 +53,8 @@ export default function PlayerControls() {
   const nextParagraph = useReaderStore((s) => s.nextParagraph);
   const previousParagraph = useReaderStore((s) => s.previousParagraph);
   const jumpToSentence = useReaderStore((s) => s.jumpToSentence);
+  const ttsProvider = useReaderStore((s) => s.ttsProvider);
+  const sourceLabel = useReaderStore((s) => s.sourceLabel);
 
   const hasText = flatSentences.length > 0;
   const isLoading = playbackState === "loading";
@@ -61,6 +69,45 @@ export default function PlayerControls() {
     else if (isPaused) resume();
     else play();
   };
+
+  // Media Session: lets mobile OSes show lock-screen transport controls and
+  // keep audio playback alive with the screen off / app backgrounded,
+  // instead of treating the tab as idle and suspending it.
+  useEffect(() => {
+    setMediaSessionHandlers({
+      onPlay: () => (isPaused ? resume() : play()),
+      onPause: pause,
+      onPreviousTrack: previousSentence,
+      onNextTrack: nextSentence,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaused]);
+
+  useEffect(() => {
+    setMediaSessionMetadata(sourceLabel ?? "ClaudeReader");
+  }, [sourceLabel]);
+
+  useEffect(() => {
+    setMediaSessionPlaybackState(isPlaying ? "playing" : isPaused ? "paused" : "none");
+  }, [isPlaying, isPaused]);
+
+  // Browser SpeechSynthesis has no real <audio> element for the OS to track,
+  // so on many mobile browsers it gets paused/throttled once the tab is
+  // backgrounded or the screen locks. Playing a near-silent looping <audio>
+  // alongside it anchors the page as "active media playback," which helps
+  // some browsers (notably Android Chrome) keep narration going. This isn't
+  // needed for the Google Cloud TTS engine, which already plays real audio.
+  const keepAliveRef = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const audio = keepAliveRef.current;
+    if (!audio) return;
+    audio.volume = 0.01;
+    if (ttsProvider === "browser" && isPlaying) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [ttsProvider, isPlaying]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!hasText) return;
@@ -79,6 +126,8 @@ export default function PlayerControls() {
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-4 sm:p-5 space-y-4">
+      <audio ref={keepAliveRef} src="/silence.wav" loop preload="auto" className="hidden" aria-hidden="true" />
+
       {/* Progress bar */}
       <div>
         <input

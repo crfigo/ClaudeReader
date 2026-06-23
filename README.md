@@ -22,6 +22,11 @@ seek bar).
   narration there — even mid-playback.
 - **Accessible**: keyboard navigable, ARIA labels, high contrast, large touch
   targets, dark mode.
+- **Background playback support**: Media Session API integration shows
+  lock-screen transport controls and helps keep narration going with the
+  screen off or the app backgrounded (most reliable on the Google Cloud TTS
+  engine; the browser SpeechSynthesis engine is best-effort on mobile — see
+  "Known limitations" below).
 
 ## Tech stack
 
@@ -29,7 +34,7 @@ seek bar).
 - Tailwind CSS 4
 - Zustand for state management
 - `pdf-parse` (PDF), `mammoth` (DOCX) for file parsing
-- `@mozilla/readability` + `jsdom` for URL article extraction
+- `@mozilla/readability` + `linkedom` for URL article extraction
 - Browser `SpeechSynthesis` API for narration (no API keys required)
 - Optional: Google Cloud Text-to-Speech REST API for higher-quality voices
 
@@ -141,5 +146,11 @@ and the browser-based narration engine needs no server resources at all.
   layouts (e.g. multi-column PDFs); use "Edit text" to clean up before playback.
 - Scanned/image-only PDFs have no extractable text — the app surfaces a clear
   error in that case.
+- Background/screen-off playback is OS- and browser-dependent. It's reliable
+  on the Google Cloud TTS engine (real `<audio>` playback + Media Session).
+  The browser SpeechSynthesis engine is inherently less reliable in the
+  background on mobile — iOS Safari in particular frequently pauses
+  `speechSynthesis` itself on screen lock, which no web API can override. If
+  uninterrupted screen-off listening matters, prefer the Google TTS engine.
 - V2 ideas: downloadable audio export, saved session history, word-level sync
   on engines that support it, summarization for long documents.
