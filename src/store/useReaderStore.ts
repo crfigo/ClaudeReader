@@ -59,11 +59,13 @@ interface ReaderState {
   error: string | null;
   fontSize: number;
   darkMode: boolean;
+  keepScreenAwake: boolean;
 
   // Actions
   initVoices: () => Promise<void>;
   setText: (text: string, sourceKind: SourceKind, sourceLabel?: string | null) => void;
   setAutoCleanText: (enabled: boolean) => void;
+  setKeepScreenAwake: (enabled: boolean) => void;
   setLanguage: (lang: "es" | "en") => void;
   setAutoDetect: (auto: boolean) => void;
   setVoiceURI: (uri: string) => void;
@@ -187,6 +189,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   error: null,
   fontSize: 18,
   darkMode: false,
+  keepScreenAwake: false,
 
   initVoices: async () => {
     const voices = await loadVoices();
@@ -209,6 +212,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   },
 
   setAutoCleanText: (enabled) => set({ autoCleanText: enabled }),
+  setKeepScreenAwake: (enabled) => set({ keepScreenAwake: enabled }),
 
   setText: (rawInput, sourceKind, sourceLabel = null) => {
     getSpeechEngine(set, get).stop();

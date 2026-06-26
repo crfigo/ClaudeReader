@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { SPEEDS, useReaderStore } from "@/store/useReaderStore";
 import { GOOGLE_VOICE_OPTIONS } from "@/lib/googleTtsEngine";
+import { isWakeLockSupported } from "@/lib/wakeLock";
 
 const SAMPLE_TEXT = {
   es: "Hola, así es como sueno. Puedo narrar tu texto con esta voz.",
@@ -20,6 +21,7 @@ export default function VoiceSettings() {
   const ttsProvider = useReaderStore((s) => s.ttsProvider);
   const googleAvailable = useReaderStore((s) => s.googleAvailable);
   const googleVoiceName = useReaderStore((s) => s.googleVoiceName);
+  const keepScreenAwake = useReaderStore((s) => s.keepScreenAwake);
 
   const setLanguage = useReaderStore((s) => s.setLanguage);
   const setAutoDetect = useReaderStore((s) => s.setAutoDetect);
@@ -29,6 +31,9 @@ export default function VoiceSettings() {
   const setRate = useReaderStore((s) => s.setRate);
   const setFontSize = useReaderStore((s) => s.setFontSize);
   const setError = useReaderStore((s) => s.setError);
+  const setKeepScreenAwake = useReaderStore((s) => s.setKeepScreenAwake);
+
+  const wakeLockSupported = isWakeLockSupported();
 
   const [previewing, setPreviewing] = useState(false);
 
@@ -270,6 +275,31 @@ export default function VoiceSettings() {
           onChange={(e) => setFontSize(Number(e.target.value))}
           className="w-full accent-indigo-600"
         />
+      </div>
+
+      {/* Keep screen awake */}
+      <div>
+        <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <input
+            type="checkbox"
+            checked={keepScreenAwake}
+            disabled={!wakeLockSupported}
+            onChange={(e) => setKeepScreenAwake(e.target.checked)}
+            className="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+          />
+          Keep screen on while playing (optional)
+        </label>
+        {wakeLockSupported ? (
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Prevents the screen from auto-locking from inactivity during narration. Won&apos;t override manually
+            pressing the power button.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+            Your browser doesn&apos;t support keeping the screen awake (common on Firefox for Android). Try Chrome
+            or Safari for this feature, or keep the screen on manually.
+          </p>
+        )}
       </div>
     </div>
   );

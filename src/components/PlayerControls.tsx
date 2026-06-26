@@ -7,6 +7,7 @@ import {
   setMediaSessionPlaybackState,
   setMediaSessionHandlers,
 } from "@/lib/mediaSession";
+import { requestWakeLock, releaseWakeLock } from "@/lib/wakeLock";
 
 function IconButton({
   label,
@@ -55,6 +56,7 @@ export default function PlayerControls() {
   const jumpToSentence = useReaderStore((s) => s.jumpToSentence);
   const ttsProvider = useReaderStore((s) => s.ttsProvider);
   const sourceLabel = useReaderStore((s) => s.sourceLabel);
+  const keepScreenAwake = useReaderStore((s) => s.keepScreenAwake);
 
   const hasText = flatSentences.length > 0;
   const isLoading = playbackState === "loading";
@@ -108,6 +110,25 @@ export default function PlayerControls() {
       audio.pause();
     }
   }, [ttsProvider, isPlaying]);
+
+  // Wake Lock: keeps the screen from auto-locking due to inactivity while
+  // narrating (there's no touch/keyboard input to reset the OS idle timer
+  // otherwise). The lock is auto-released by the browser whenever the page
+  // becomes hidden, so it's re-requested on the next 'visibilitychange' back
+  // to visible if playback is still active and the user opted in.
+  useEffect(() => {
+    if (!keepScreenAwake || !isPlaying) {
+      releaseWakeLock();
+      return;
+    }
+
+    requestWakeLock();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [keepScreenAwake, isPlaying]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!hasText) return;
